@@ -1,146 +1,136 @@
 import streamlit as st
-import pickle
-from textblob import TextBlob
-import matplotlib.pyplot as plt
-import datetime
 import time
+import matplotlib.pyplot as plt
+from train import analyze_review
 
-# --------------------------
-# Load model & vectorizer
-model = pickle.load(open("model.pkl", "rb"))
-vectorizer = pickle.load(open("vectorizer.pkl", "rb"))
+# ------------------ PAGE CONFIG ------------------
+st.set_page_config(page_title="Fake Review Detector", page_icon="🕵️", layout="wide")
 
-# --------------------------
-# Title
-st.title("🕵️ Fake Review Detector AI")
-st.write("Analyze whether a review is Fake or Genuine with AI insights")
-
-# --------------------------
-# Input
-review = st.text_area("Enter your review")
-
-# --------------------------
-# Session history
+# ------------------ SESSION STATE (History) ------------------
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# --------------------------
-# Analyze Button
-if st.button("Analyze Review"):
+# ------------------ CUSTOM CSS ------------------
+st.markdown("""
+<style>
+.main {
+    background: linear-gradient(135deg, #0e1117, #1c1f26);
+    color: white;
+}
+.stTextArea textarea {
+    background-color: #262730;
+    color: white;
+    border-radius: 12px;
+}
+.stButton button {
+    background: linear-gradient(90deg, #ff4b4b, #ff6b6b);
+    color: white;
+    border-radius: 12px;
+    height: 3em;
+    width: 100%;
+    font-size: 18px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    if review.strip() == "":
-        st.warning("Please enter a review!")
+# ------------------ SIDEBAR ------------------
+st.sidebar.title("📌 Dashboard")
+st.sidebar.write("Fake Review Detector AI")
+st.sidebar.markdown("---")
+st.sidebar.write("### History")
+
+for item in st.session_state.history[-5:][::-1]:
+    st.sidebar.write(f"🔹 {item['review'][:30]}...")
+    st.sidebar.write(f"➡️ {item['result']} ({item['confidence']}%)")
+
+# ------------------ HEADER ------------------
+st.markdown("<h1 style='text-align:center;'>🕵️ Fake Review Detector</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;'>AI-powered fake review detection system</p>", unsafe_allow_html=True)
+
+st.divider()
+
+# ------------------ INPUT ------------------
+col1, col2 = st.columns([2,1])
+
+with col1:
+    review = st.text_area("✍️ Enter Review", height=150)
+    analyze = st.button("🚀 Analyze Review")
+
+with col2:
+    st.info("💡 Tips:\n- Avoid generic phrases\n- Watch repeated words\n- Check overly positive tone")
+
+st.divider()
+
+# ------------------ ANALYSIS ------------------
+if analyze and review.strip() != "":
+    
+    with st.spinner("🤖 AI analyzing..."):
+        time.sleep(1.2)
+        result = analyze_review(review)
+
+    # Save history
+    st.session_state.history.append({
+        "review": review,
+        "result": result["result"],
+        "confidence": result["confidence"]
+    })
+
+    # RESULT
+    if result["result"] == "Fake":
+        st.error(f"⚠️ Fake Review ({result['confidence']}%)")
     else:
-        # Loading animation
-        with st.spinner("🤖 AI is analyzing..."):
-            time.sleep(1)
+        st.success(f"✅ Genuine Review ({result['confidence']}%)")
 
-        # --------------------------
-        # Prediction
-        X_test = vectorizer.transform([review])
-        prob_fake = model.predict_proba(X_test)[0][1]
-        result = "Fake" if prob_fake > 0.5 else "Genuine"
+    # METRICS
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Confidence", f"{result['confidence']}%")
+    col2.metric("Sentiment", result["sentiment"])
+    col3.metric("Trust Score", f"{100 - result['confidence']}%")
 
-        # --------------------------
-        # Trust Score
-        trust_score = round((1 - prob_fake) * 100, 2)
+    st.divider()
 
-        # --------------------------
-        # Sentiment
-        sentiment_score = TextBlob(review).sentiment.polarity
-        if sentiment_score > 0.1:
-            sentiment = "Positive"
-        elif sentiment_score < -0.1:
-            sentiment = "Negative"
-        else:
-            sentiment = "Neutral"
+    # EXPLANATION
+    st.subheader("🤖 AI Explanation")
+    if result["explanation"]:
+        for e in result["explanation"]:
+            st.write("•", e)
+    else:
+        st.write("No major issues detected")
 
-        # --------------------------
-        # Suspicious words
-        suspicious_words_list = [
-            "best ever", "100% guaranteed",
-            "amazing product", "life-changing"
-        ]
-        found_words = [w for w in suspicious_words_list if w in review.lower()]
+    # SUSPICIOUS WORDS
+    if result["suspicious_words"]:
+        st.warning("⚠️ Suspicious Words:")
+        st.write(", ".join(result["suspicious_words"]))
 
-        # --------------------------
-        # Explanation logic
-        explanation = []
+    st.divider()
 
-        if result == "Fake":
-            if found_words:
-                explanation.append("Uses generic/suspicious phrases")
-            if sentiment == "Positive" and prob_fake > 0.8:
-                explanation.append("Overly positive tone")
-            if len(review.split()) < 3 or len(review.split()) > 50:
-                explanation.append("Unusual review length")
+    # ------------------ CHARTS ------------------
+    st.subheader("📊 Visualization")
 
-        # Pattern detection
-        words = review.lower().split()
-        if len(words) != len(set(words)):
-            explanation.append("Repeated words detected")
+    fake = result["confidence"]
+    genuine = 100 - fake
 
-        if review.count("!") > 3:
-            explanation.append("Too many exclamation marks")
+    col1, col2 = st.columns(2)
 
-        # --------------------------
-        # DISPLAY RESULTS
+    # PIE CHART
+    with col1:
+        fig1, ax1 = plt.subplots()
+        ax1.pie([fake, genuine], labels=["Fake", "Genuine"], autopct='%1.1f%%')
+        ax1.set_title("Fake vs Genuine")
+        st.pyplot(fig1)
 
-        st.subheader("📊 Detailed Analysis")
+    # BAR CHART (Sentiment)
+    with col2:
+        sentiment_map = {"Positive": 1, "Neutral": 0, "Negative": -1}
+        score = sentiment_map.get(result["sentiment"], 0)
 
-        if result == "Fake":
-            st.error(f"⚠️ Fake Review ({round(prob_fake*100,2)}%)")
-        else:
-            st.success(f"✅ Genuine Review ({round(prob_fake*100,2)}%)")
-
-        st.write("**Review:**", review)
-        st.write("**Sentiment:**", sentiment)
-
-        # Explanation
-        st.subheader("🤖 Why this review is fake?")
-        if explanation:
-            for e in explanation:
-                st.write("•", e)
-        else:
-            st.write("No major issues detected ✅")
-
-        # Suspicious words
-        if found_words:
-            st.write("**⚠️ Suspicious Words:**", found_words)
-
-        # Trust Score
-        st.subheader("📈 Product Trust Score")
-        st.write(f"{trust_score}%")
-
-        # --------------------------
-        # VISUALIZATION
-
-        st.subheader("📊 Visual Insights")
-
-        # Pie Chart
-        fig, ax = plt.subplots()
-        ax.pie([prob_fake, 1-prob_fake],
-               labels=["Fake", "Genuine"],
-               autopct="%1.1f%%")
-        st.pyplot(fig)
-
-        # Sentiment Bar
         fig2, ax2 = plt.subplots()
-        ax2.bar(["Sentiment Score"], [sentiment_score])
+        ax2.bar(["Sentiment Score"], [score])
+        ax2.set_title("Sentiment Analysis")
         st.pyplot(fig2)
 
-        # --------------------------
-        # Save History
-        st.session_state.history.append({
-            "review": review,
-            "result": result,
-            "time": datetime.datetime.now().strftime("%H:%M:%S")
-        })
+    st.divider()
 
-# --------------------------
-# SHOW HISTORY
-
-st.subheader("🕒 Review History")
-
-for item in st.session_state.history:
-    st.write(f"{item['time']} - {item['review']} → {item['result']}")
+# ------------------ FOOTER ------------------
+st.markdown("---")
+st.markdown("<p style='text-align:center;'>Made with ❤️ using Streamlit</p>", unsafe_allow_html=True)
