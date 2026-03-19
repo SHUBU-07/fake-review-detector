@@ -43,7 +43,7 @@ FakeReviewDetector/
 ## ⚙️ Installation & Setup
 
 1. Clone the repository
-   git clone https://github.com/your-username/fake-review-detector.git
+   git clone (https://github.com/SHUBU-07/fake-review-detector)
    cd fake-review-detector
 
 2. Create virtual environment
