@@ -39,9 +39,9 @@ st.markdown("# 🚀 AI Fake Review Detector")
 st.markdown("### ⚡ Detect fake reviews, analyze sentiment & trust score")
 
 # --------------------------
-# SENTIMENT (simple)
+# SENTIMENT
 def get_sentiment(text):
-    positive_words = ["good", "great", "amazing", "love", "excellent"]
+    positive_words = ["good", "great", "amazing", "love", "excellent", "worth"]
     negative_words = ["bad", "worst", "hate", "terrible"]
 
     if any(word in text.lower() for word in positive_words):
@@ -56,11 +56,18 @@ def get_sentiment(text):
 def analyze_review(review_text):
     X_test = vectorizer.transform([review_text])
     prob_fake = model.predict_proba(X_test)[0][1]
-    result_label = "Fake" if prob_fake > 0.5 else "Genuine"
+
+    # 🔥 NEW SMART THRESHOLD
+    if prob_fake > 0.7:
+        result_label = "Fake"
+    elif prob_fake < 0.3:
+        result_label = "Genuine"
+    else:
+        result_label = "Uncertain"
 
     sentiment = get_sentiment(review_text)
 
-    suspicious_words = ["best ever", "100% guaranteed", "life-changing"]
+    suspicious_words = ["best ever", "100 percent", "life changing", "must buy"]
     found_words = [w for w in suspicious_words if w in review_text.lower()]
 
     # AI Explanation
@@ -79,9 +86,10 @@ def analyze_review(review_text):
         explanation.append("Too long or repetitive")
 
     if result_label == "Genuine":
-        if not found_words:
-            explanation.append("No suspicious keywords detected")
-        explanation.append("Language appears natural and realistic")
+        explanation.append("Language appears natural and balanced")
+
+    if result_label == "Uncertain":
+        explanation.append("Model confidence is low, borderline case")
 
     return prob_fake, result_label, sentiment, found_words, explanation
 
@@ -201,11 +209,13 @@ if st.button("Analyze Review") and review_text:
 
         prob_fake, result_label, sentiment, words, explanation = analyze_review(review_text)
 
-        # RESULT
+        # RESULT DISPLAY
         if result_label == "Fake":
             st.error(f"❌ Fake Review ({prob_fake*100:.2f}%)")
-        else:
+        elif result_label == "Genuine":
             st.success(f"✅ Genuine Review ({prob_fake*100:.2f}%)")
+        else:
+            st.warning(f"⚠️ Uncertain Result ({prob_fake*100:.2f}%)")
 
         st.progress(prob_fake)
 
@@ -214,18 +224,16 @@ if st.button("Analyze Review") and review_text:
         if words:
             st.write("⚠ Suspicious Words:", ", ".join(words))
 
-        # --------------------------
         # AI EXPLANATION
         if result_label == "Fake":
             st.subheader("🤖 Why this review is Fake?")
-        else:
+        elif result_label == "Genuine":
             st.subheader("🤖 Why this review is Genuine?")
-
-        if explanation:
-            for e in explanation:
-                st.write("•", e)
         else:
-            st.write("• Based on learned patterns from dataset")
+            st.subheader("🤖 Why this review is Uncertain?")
+
+        for e in explanation:
+            st.write("•", e)
 
         # SAVE HISTORY
         save_history(review_text, result_label, prob_fake*100, sentiment)
