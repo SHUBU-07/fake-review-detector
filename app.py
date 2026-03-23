@@ -1,11 +1,11 @@
 import streamlit as st
 import pickle
 import pandas as pd
-from textblob import TextBlob
 import matplotlib.pyplot as plt
 import json
 import datetime
-import speech_recognition as sr
+import requests
+from bs4 import BeautifulSoup
 
 # --------------------------
 # Load model
@@ -13,46 +13,71 @@ model = pickle.load(open("model.pkl", "rb"))
 vectorizer = pickle.load(open("vectorizer.pkl", "rb"))
 
 # --------------------------
-# Page config
-st.set_page_config(page_title="Fake Review Detector", layout="wide")
-st.title("🚀 AI Fake Review Detector - Final Boss Mode")
+# PREMIUM UI CSS
+st.markdown("""
+<style>
+body {
+    background-color: #0E1117;
+    color: white;
+}
+.stButton>button {
+    background-color: #ff4b4b;
+    color: white;
+    border-radius: 10px;
+    height: 3em;
+    width: 100%;
+}
+.stTextArea textarea {
+    border-radius: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # --------------------------
-# Analyze Function
+# TITLE
+st.markdown("# 🚀 AI Fake Review Detector")
+st.markdown("### ⚡ Analyze reviews, detect fake content, and generate trust score")
+
+# --------------------------
+# SIMPLE SENTIMENT (no TextBlob)
+def get_sentiment(text):
+    positive_words = ["good", "great", "amazing", "love", "excellent"]
+    negative_words = ["bad", "worst", "hate", "terrible"]
+
+    if any(word in text.lower() for word in positive_words):
+        return "Positive"
+    elif any(word in text.lower() for word in negative_words):
+        return "Negative"
+    else:
+        return "Neutral"
+
+# --------------------------
+# ANALYZE FUNCTION
 def analyze_review(review_text):
     X_test = vectorizer.transform([review_text])
     prob_fake = model.predict_proba(X_test)[0][1]
     result_label = "Fake" if prob_fake > 0.5 else "Genuine"
 
-    # Sentiment
-    sentiment_score = TextBlob(review_text).sentiment.polarity
-    if sentiment_score > 0.1:
-        sentiment = "Positive"
-    elif sentiment_score < -0.1:
-        sentiment = "Negative"
-    else:
-        sentiment = "Neutral"
+    sentiment = get_sentiment(review_text)
 
-    # Suspicious words
-    suspicious_words_list = ["best ever", "100% guaranteed", "amazing product", "life-changing"]
-    found_words = [w for w in suspicious_words_list if w in review_text.lower()]
+    suspicious_words = ["best ever", "100% guaranteed", "life-changing"]
+    found_words = [w for w in suspicious_words if w in review_text.lower()]
 
-    # Explanation
     explanation = []
     if result_label == "Fake":
         if found_words:
-            explanation.append("Uses generic/suspicious phrases")
-        if sentiment == "Positive" and prob_fake > 0.8:
+            explanation.append("Uses suspicious marketing phrases")
+        if sentiment == "Positive" and prob_fake > 0.7:
             explanation.append("Overly positive tone")
-        if len(review_text.split()) < 3 or len(review_text.split()) > 50:
+        if len(review_text.split()) < 3 or len(review_text.split()) > 40:
             explanation.append("Unusual review length")
 
     return prob_fake, result_label, sentiment, found_words, explanation
 
 # --------------------------
-# Save History
+# HISTORY SAVE
 def save_history(review, result, confidence, sentiment):
-    history_file = "history.json"
+    file = "history.json"
 
     record = {
         "review": review,
@@ -63,19 +88,38 @@ def save_history(review, result, confidence, sentiment):
     }
 
     try:
-        with open(history_file, "r") as f:
+        with open(file, "r") as f:
             data = json.load(f)
     except:
         data = []
 
     data.append(record)
 
-    with open(history_file, "w") as f:
+    with open(file, "w") as f:
         json.dump(data, f, indent=4)
 
 # --------------------------
-# INPUT OPTIONS
-option = st.sidebar.selectbox("Choose Input Type", ["Text", "Voice", "File Upload"])
+# URL REVIEW EXTRACTION
+def extract_reviews(url):
+    reviews = []
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers)
+        soup = BeautifulSoup(res.content, "html.parser")
+
+        for p in soup.find_all("p"):
+            text = p.get_text().strip()
+            if len(text) > 30:
+                reviews.append(text)
+
+    except:
+        st.error("Error fetching reviews")
+
+    return reviews[:10]
+
+# --------------------------
+# SIDEBAR OPTIONS
+option = st.sidebar.selectbox("Choose Input", ["Text", "File Upload", "URL Analyzer"])
 
 review_text = ""
 
@@ -83,22 +127,10 @@ review_text = ""
 if option == "Text":
     review_text = st.text_area("Enter Review")
 
-# VOICE INPUT
-elif option == "Voice":
-    if st.button("🎙 Speak"):
-        r = sr.Recognizer()
-        with sr.Microphone() as source:
-            st.info("Speak now...")
-            audio = r.listen(source)
-            try:
-                review_text = r.recognize_google(audio)
-                st.success(f"You said: {review_text}")
-            except:
-                st.error("Could not understand audio")
-
 # FILE UPLOAD
 elif option == "File Upload":
     file = st.file_uploader("Upload CSV with 'review' column")
+
     if file:
         df = pd.read_csv(file)
         st.write(df)
@@ -116,59 +148,86 @@ elif option == "File Upload":
         result_df = pd.DataFrame(results)
         st.write(result_df)
 
-        # Trust Score
-        genuine_count = sum(result_df["result"] == "Genuine")
-        trust_score = (genuine_count / len(result_df)) * 100
-        st.subheader(f"📊 Product Trust Score: {trust_score:.2f}%")
+        genuine = sum(result_df["result"] == "Genuine")
+        trust_score = (genuine / len(result_df)) * 100
+        st.subheader(f"🔥 Product Trust Score: {trust_score:.2f}%")
+
+# URL ANALYZER
+elif option == "URL Analyzer":
+    url = st.text_input("Paste Product URL")
+
+    if st.button("Analyze URL"):
+        reviews = extract_reviews(url)
+
+        if reviews:
+            st.write(reviews)
+
+            results = []
+            for r in reviews:
+                prob_fake, result_label, sentiment, _, _ = analyze_review(r)
+                results.append({
+                    "review": r,
+                    "result": result_label,
+                    "confidence": prob_fake * 100,
+                    "sentiment": sentiment
+                })
+
+            df = pd.DataFrame(results)
+            st.write(df)
+
+            genuine = sum(df["result"] == "Genuine")
+            trust_score = (genuine / len(df)) * 100
+            st.subheader(f"🔥 Product Trust Score: {trust_score:.2f}%")
 
 # --------------------------
 # ANALYZE BUTTON
 if st.button("Analyze Review") and review_text:
-    prob_fake, result_label, sentiment, found_words, explanation = analyze_review(review_text)
+    with st.spinner("🤖 AI analyzing..."):
 
-    st.subheader(f"Result: {result_label}")
-    st.write(f"Confidence: {prob_fake*100:.2f}%")
-    st.write(f"Sentiment: {sentiment}")
+        prob_fake, result_label, sentiment, words, explanation = analyze_review(review_text)
 
-    if found_words:
-        st.write("⚠ Suspicious Words:", ", ".join(found_words))
+        if result_label == "Fake":
+            st.error(f"❌ Fake Review ({prob_fake*100:.2f}%)")
+        else:
+            st.success(f"✅ Genuine Review ({prob_fake*100:.2f}%)")
 
-    # Explanation
-    st.subheader("🤖 Why this review?")
-    for e in explanation:
-        st.write("-", e)
+        st.progress(prob_fake)
+        st.write(f"Sentiment: {sentiment}")
 
-    # Save history
-    save_history(review_text, result_label, prob_fake*100, sentiment)
+        if words:
+            st.write("⚠ Suspicious Words:", ", ".join(words))
 
-    # --------------------------
-    # GRAPH
-    col1, col2 = st.columns(2)
+        st.subheader("Why this review?")
+        for e in explanation:
+            st.write("-", e)
 
-    with col1:
-        st.subheader("Fake vs Genuine")
-        plt.figure()
-        plt.pie([prob_fake, 1-prob_fake], labels=["Fake", "Genuine"], autopct='%1.1f%%')
-        st.pyplot(plt)
+        save_history(review_text, result_label, prob_fake*100, sentiment)
 
-    with col2:
-        st.subheader("Sentiment")
-        values = [
-            1 if sentiment=="Positive" else 0,
-            1 if sentiment=="Neutral" else 0,
-            1 if sentiment=="Negative" else 0
-        ]
-        plt.figure()
-        plt.bar(["Positive", "Neutral", "Negative"], values)
-        st.pyplot(plt)
+        # GRAPH
+        col1, col2 = st.columns(2)
+
+        with col1:
+            plt.figure()
+            plt.pie([prob_fake, 1-prob_fake], labels=["Fake","Genuine"], autopct='%1.1f%%')
+            st.pyplot(plt)
+
+        with col2:
+            plt.figure()
+            vals = [
+                1 if sentiment=="Positive" else 0,
+                1 if sentiment=="Neutral" else 0,
+                1 if sentiment=="Negative" else 0
+            ]
+            plt.bar(["Positive","Neutral","Negative"], vals)
+            st.pyplot(plt)
 
 # --------------------------
-# HISTORY
-st.sidebar.subheader("📁 Review History")
+# HISTORY DISPLAY
+st.sidebar.subheader("📁 History")
 try:
     with open("history.json", "r") as f:
         history = json.load(f)
         for item in reversed(history[-5:]):
             st.sidebar.write(f"{item['result']} ({item['confidence']:.1f}%)")
 except:
-    st.sidebar.write("No history yet")
+    st.sidebar.write("No history")
