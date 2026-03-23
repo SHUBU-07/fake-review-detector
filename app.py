@@ -1,136 +1,88 @@
-import streamlit as st
-import time
-import matplotlib.pyplot as plt
-from train import analyze_review
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+import pickle
+from textblob import TextBlob
 
-# ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="Fake Review Detector", page_icon="🕵️", layout="wide")
-
-# ------------------ SESSION STATE (History) ------------------
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-# ------------------ CUSTOM CSS ------------------
-st.markdown("""
-<style>
-.main {
-    background: linear-gradient(135deg, #0e1117, #1c1f26);
-    color: white;
+# --------------------------
+# 1️⃣ Sample Dataset
+# Replace with your full dataset later
+data = {
+    "review": [
+        "This product is amazing",
+        "Worst product ever",
+        "I love this item",
+        "Fake fake fake product",
+        "Very good quality",
+        "Do not buy this",
+        "Best ever! 100% guaranteed",
+        "Life-changing item, amazing!"
+    ],
+    "label": [0, 1, 0, 1, 0, 1, 1, 0]  # 0 = real, 1 = fake
 }
-.stTextArea textarea {
-    background-color: #262730;
-    color: white;
-    border-radius: 12px;
-}
-.stButton button {
-    background: linear-gradient(90deg, #ff4b4b, #ff6b6b);
-    color: white;
-    border-radius: 12px;
-    height: 3em;
-    width: 100%;
-    font-size: 18px;
-}
-</style>
-""", unsafe_allow_html=True)
+df = pd.DataFrame(data)
 
-# ------------------ SIDEBAR ------------------
-st.sidebar.title("📌 Dashboard")
-st.sidebar.write("Fake Review Detector AI")
-st.sidebar.markdown("---")
-st.sidebar.write("### History")
+# --------------------------
+# 2️⃣ Vectorization
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(df["review"])
 
-for item in st.session_state.history[-5:][::-1]:
-    st.sidebar.write(f"🔹 {item['review'][:30]}...")
-    st.sidebar.write(f"➡️ {item['result']} ({item['confidence']}%)")
+# --------------------------
+# 3️⃣ Model
+model = LogisticRegression()
+model.fit(X, df["label"])
 
-# ------------------ HEADER ------------------
-st.markdown("<h1 style='text-align:center;'>🕵️ Fake Review Detector</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>AI-powered fake review detection system</p>", unsafe_allow_html=True)
-
-st.divider()
-
-# ------------------ INPUT ------------------
-col1, col2 = st.columns([2,1])
-
-with col1:
-    review = st.text_area("✍️ Enter Review", height=150)
-    analyze = st.button("🚀 Analyze Review")
-
-with col2:
-    st.info("💡 Tips:\n- Avoid generic phrases\n- Watch repeated words\n- Check overly positive tone")
-
-st.divider()
-
-# ------------------ ANALYSIS ------------------
-if analyze and review.strip() != "":
+# --------------------------
+# 4️⃣ Function to analyze reviews
+def analyze_review(review_text):
+    # Vectorize
+    X_test = vectorizer.transform([review_text])
     
-    with st.spinner("🤖 AI analyzing..."):
-        time.sleep(1.2)
-        result = analyze_review(review)
-
-    # Save history
-    st.session_state.history.append({
-        "review": review,
-        "result": result["result"],
-        "confidence": result["confidence"]
-    })
-
-    # RESULT
-    if result["result"] == "Fake":
-        st.error(f"⚠️ Fake Review ({result['confidence']}%)")
+    # Probability (confidence)
+    prob_fake = model.predict_proba(X_test)[0][1]  # probability of being fake
+    result_label = "Fake" if prob_fake > 0.5 else "Genuine"
+    
+    # Sentiment Analysis
+    sentiment_score = TextBlob(review_text).sentiment.polarity
+    if sentiment_score > 0.1:
+        sentiment = "Positive"
+    elif sentiment_score < -0.1:
+        sentiment = "Negative"
     else:
-        st.success(f"✅ Genuine Review ({result['confidence']}%)")
+        sentiment = "Neutral"
+    
+    # Suspicious Words
+    suspicious_words_list = ["best ever", "100% guaranteed", "amazing product", "life-changing"]
+    found_words = [w for w in suspicious_words_list if w in review_text.lower()]
+    
+    # Explanation
+    explanation = []
+    if result_label == "Fake":
+        if found_words:
+            explanation.append("Uses generic/suspicious phrases")
+        if sentiment == "Positive" and prob_fake > 0.8:
+            explanation.append("Overly positive tone")
+        if len(review_text.split()) < 3 or len(review_text.split()) > 50:
+            explanation.append("Unusual review length")
+    
+    # Return all info as a dictionary
+    return {
+        "review": review_text,
+        "result": result_label,
+        "confidence": round(prob_fake*100, 2),
+        "sentiment": sentiment,
+        "suspicious_words": found_words,
+        "explanation": explanation
+    }
 
-    # METRICS
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Confidence", f"{result['confidence']}%")
-    col2.metric("Sentiment", result["sentiment"])
-    col3.metric("Trust Score", f"{100 - result['confidence']}%")
+# Example usage
+if __name__ == "__main__":
+    test_review = "Best ever! I love this product"
+    analysis = analyze_review(test_review)
+    print(analysis)
 
-    st.divider()
-
-    # EXPLANATION
-    st.subheader("🤖 AI Explanation")
-    if result["explanation"]:
-        for e in result["explanation"]:
-            st.write("•", e)
-    else:
-        st.write("No major issues detected")
-
-    # SUSPICIOUS WORDS
-    if result["suspicious_words"]:
-        st.warning("⚠️ Suspicious Words:")
-        st.write(", ".join(result["suspicious_words"]))
-
-    st.divider()
-
-    # ------------------ CHARTS ------------------
-    st.subheader("📊 Visualization")
-
-    fake = result["confidence"]
-    genuine = 100 - fake
-
-    col1, col2 = st.columns(2)
-
-    # PIE CHART
-    with col1:
-        fig1, ax1 = plt.subplots()
-        ax1.pie([fake, genuine], labels=["Fake", "Genuine"], autopct='%1.1f%%')
-        ax1.set_title("Fake vs Genuine")
-        st.pyplot(fig1)
-
-    # BAR CHART (Sentiment)
-    with col2:
-        sentiment_map = {"Positive": 1, "Neutral": 0, "Negative": -1}
-        score = sentiment_map.get(result["sentiment"], 0)
-
-        fig2, ax2 = plt.subplots()
-        ax2.bar(["Sentiment Score"], [score])
-        ax2.set_title("Sentiment Analysis")
-        st.pyplot(fig2)
-
-    st.divider()
-
-# ------------------ FOOTER ------------------
-st.markdown("---")
-st.markdown("<p style='text-align:center;'>Made with ❤️ using Streamlit</p>", unsafe_allow_html=True)
+# --------------------------
+# 5️⃣ Save model and vectorizer
+pickle.dump(model, open("model.pkl", "wb"))
+pickle.dump(vectorizer, open("vectorizer.pkl", "wb"))
+print("Model and vectorizer saved!")
