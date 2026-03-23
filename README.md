@@ -1,99 +1,30 @@
-# 🕵️ Fake Review Detector AI
+# 🚀 AI Fake Review Detector
 
-An AI-powered web application that detects whether a product review is **Fake or Genuine** using Machine Learning and Natural Language Processing (NLP).
+## 📌 Overview
+This project detects whether a product review is **Fake or Genuine** using Machine Learning and NLP techniques.
 
----
-
-## 🚀 Features
-
-* Fake / Genuine Review Detection
-* Confidence Score (%)
-* Sentiment Analysis (Positive / Neutral / Negative)
-* Suspicious Word Detection
-* AI Explanation (Why the review is fake)
-* Product Trust Score
-* Data Visualization (Pie Chart & Graphs)
-* Review History Tracking
-
----
+## ✨ Features
+- Fake vs Genuine classification
+- AI explanation (Why review is fake)
+- Sentiment analysis
+- Suspicious keyword detection
+- URL review analyzer
+- Product trust score
+- Review history tracking
 
 ## 🧠 Technologies Used
+- Python
+- Streamlit
+- Scikit-learn
+- NLP (TF-IDF)
+- Naive Bayes
 
-* Python
-* Streamlit
-* Scikit-learn
-* TF-IDF Vectorization
-* TextBlob
-* Matplotlib
+## 📊 Model Performance
+- Accuracy: ~90%
 
----
+## ▶️ How to Run
 
-## 📂 Project Structure
-
-FakeReviewDetector/
-
-* app.py
-* backend.py
-* model.pkl
-* vectorizer.pkl
-* requirements.txt
-
----
-
-## ⚙️ Installation & Setup
-
-1. Clone the repository
-   git clone (https://github.com/SHUBU-07/fake-review-detector)
-   cd fake-review-detector
-
-2. Create virtual environment
-   python -m venv .venv
-
-3. Activate environment
-   ..venv\Scripts\activate
-
-4. Install dependencies
-   pip install -r requirements.txt
-
-5. Download TextBlob data
-   python -m textblob.download_corpora
-
-6. Run the app
-   streamlit run app.py
-
----
-
-## 🌐 Deployment
-
-This project can be deployed using Streamlit Cloud.
-
----
-
-## 🎯 How It Works
-
-1. User enters a review
-2. Text is converted using TF-IDF
-3. Machine Learning model predicts fake/genuine
-4. Sentiment analysis is performed
-5. System provides explanation and visualization
-
----
-
-## 📌 Future Improvements
-
-* URL-based review analysis
-* Bulk review analysis (CSV upload)
-* User login system
-* Advanced AI models (BERT / LSTM)
-
----
-
-## 👨‍💻 Author
-
-Shubham Baliarsingh
-
----
-
-## ⭐ If you like this project
-
-Give it a star on GitHub!
+```bash
+pip install -r requirements.txt
+python train.py
+streamlit run app.py
