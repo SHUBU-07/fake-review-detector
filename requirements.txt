@@ -1,5 +1,6 @@
 streamlit
-scikit-learn
 pandas
-textblob
+scikit-learn
 matplotlib
+requests
+beautifulsoup4
