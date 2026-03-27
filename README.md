@@ -1,9 +1,9 @@
-# 🚀 AI Fake Review Detector
+#  AI Fake Review Detector
 
-## 📌 Overview
+## - Overview
 This project detects whether a product review is **Fake or Genuine** using Machine Learning and NLP techniques.
 
-## ✨ Features
+## - Features
 - Fake vs Genuine classification
 - AI explanation (Why review is fake)
 - Sentiment analysis
@@ -12,17 +12,17 @@ This project detects whether a product review is **Fake or Genuine** using Machi
 - Product trust score
 - Review history tracking
 
-## 🧠 Technologies Used
+## - Technologies Used
 - Python
 - Streamlit
 - Scikit-learn
 - NLP (TF-IDF)
 - Naive Bayes
 
-## 📊 Model Performance
+## - Model Performance
 - Accuracy: ~90%
 
-## ▶️ How to Run
+## - How to Run
 
 ```bash
 pip install -r requirements.txt
